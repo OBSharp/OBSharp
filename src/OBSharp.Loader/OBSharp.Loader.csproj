@@ -1,0 +1,11 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PublishAot>true</PublishAot>
+    <AssemblyName>OBSharp</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="OBSharp.Interop.OBS" />
+    <PackageReference Include="Shimakaze.HostFxr" />
+    <PackageReference Include="Shimakaze.NetHost" />
+  </ItemGroup>
+</Project>

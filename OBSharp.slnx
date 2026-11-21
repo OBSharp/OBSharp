@@ -8,4 +8,5 @@
     <File Path="global.json" />
     <File Path="nuget.config" />
   </Folder>
+  <Project Path="src/OBSharp.Loader/OBSharp.Loader.csproj" />
 </Solution>

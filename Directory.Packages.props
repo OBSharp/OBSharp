@@ -4,5 +4,8 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
+    <PackageVersion Include="OBSharp.Interop.OBS" Version="0.0.1-alpha.1" />
+    <PackageVersion Include="Shimakaze.HostFxr" Version="0.0.10" />
+    <PackageVersion Include="Shimakaze.NetHost" Version="0.0.10" />
   </ItemGroup>
 </Project>
