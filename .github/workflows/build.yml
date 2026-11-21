@@ -237,10 +237,10 @@ jobs:
 
   release:
     needs: build
-    name: 发布 NuGet 包
+    name: 发布
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
-      contents: read
+      contents: write
       packages: write
     runs-on: ubuntu-latest
     steps:
@@ -267,6 +267,22 @@ jobs:
         with:
           name: nuget-packages
           path: artifacts
+
+      - name: 下载发布附件
+        uses: actions/download-artifact@v8
+        with:
+          pattern: OBSharp-*
+          path: release-assets
+          skip-decompress: true
+
+      - name: 创建 GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            release-assets/**/*
+            nuget-packages/**/*
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref, '-') }}
 
       - name: 推送 NuGet 包
         run: |
