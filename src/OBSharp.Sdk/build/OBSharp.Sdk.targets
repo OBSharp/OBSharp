@@ -1,0 +1,80 @@
+<Project>
+
+  <!--
+    宿主（OBSharp.Runtime）自己带着这些程序集，插件目录里再放一份没有任何用处：
+    OBSharpPluginLoadContext 把宿主解析得到的程序集一律交给默认上下文，插件旁边那份永远用不上，
+    只会白占空间，还会让插件自己的 deps.json 指向不存在的文件。
+
+    怎么用：
+    - 引用 OBSharp.Sdk 包时这个文件会自动生效（包里的 build/）。
+    不想去掉的话，把 OBSharpExcludeHostAssembliesFromOutput 设成 false。
+  -->
+
+  <PropertyGroup>
+    <OBSharpExcludeHostAssembliesFromOutput Condition="'$(OBSharpExcludeHostAssembliesFromOutput)' == ''">true</OBSharpExcludeHostAssembliesFromOutput>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <OBSharpHostAssembly Include="Microsoft.Extensions.Configuration.Binder" />
+    <OBSharpHostAssembly Include="Microsoft.Extensions.Configuration.CommandLine" />
+    <OBSharpHostAssembly Include="Microsoft.Extensions.Configuration" />
+    <OBSharpHostAssembly Include="Microsoft.Extensions.Configuration.EnvironmentVariables" />
+    <OBSharpHostAssembly Include="Microsoft.Extensions.Configuration.FileExtensions" />
+    <OBSharpHostAssembly Include="Microsoft.Extensions.Configuration.Json" />
+    <OBSharpHostAssembly Include="Microsoft.Extensions.Configuration.UserSecrets" />
+    <OBSharpHostAssembly Include="Microsoft.Extensions.DependencyInjection" />
+    <OBSharpHostAssembly Include="Microsoft.Extensions.Diagnostics" />
+    <OBSharpHostAssembly Include="Microsoft.Extensions.FileProviders.Physical" />
+    <OBSharpHostAssembly Include="Microsoft.Extensions.FileSystemGlobbing" />
+    <OBSharpHostAssembly Include="Microsoft.Extensions.Hosting" />
+    <OBSharpHostAssembly Include="Microsoft.Extensions.Logging.Configuration" />
+    <OBSharpHostAssembly Include="Microsoft.Extensions.Logging.Console" />
+    <OBSharpHostAssembly Include="Microsoft.Extensions.Logging.Debug" />
+    <OBSharpHostAssembly Include="Microsoft.Extensions.Logging" />
+    <OBSharpHostAssembly Include="Microsoft.Extensions.Logging.EventLog" />
+    <OBSharpHostAssembly Include="Microsoft.Extensions.Logging.EventSource" />
+    <OBSharpHostAssembly Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+    <OBSharpHostAssembly Include="OBSharp.Interop.OBS" />
+    <OBSharpHostAssembly Include="OBSharp.Runtime" />
+    <OBSharpHostAssembly Include="OBSharp.Sdk" />
+    <OBSharpHostAssembly Include="System.Diagnostics.EventLog" />
+  </ItemGroup>
+
+  <Target Name="OBSharpExcludeHostAssembliesFromOutput"
+    Condition="'$(OBSharpExcludeHostAssembliesFromOutput)' == 'true'"
+    AfterTargets="ResolveReferences"
+    BeforeTargets="_CopyFilesMarkedCopyLocal;GenerateBuildDependencyFile;CopyFilesToOutputDirectory">
+    <!-- 静态求值时读不到上面的 ItemGroup，所以在 Target 里拼成 ";A;B;"，下面按 ";文件名;" 匹配。 -->
+    <PropertyGroup>
+      <_OBSharpHostAssemblyNames>;@(OBSharpHostAssembly,';');</_OBSharpHostAssemblyNames>
+    </PropertyGroup>
+    <ItemGroup>
+      <!-- 不拷进输出目录。 -->
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)"
+        Condition="$([System.String]::Copy('$(_OBSharpHostAssemblyNames)').Contains(';%(ReferenceCopyLocalPaths.Filename);'))" />
+      <!-- 也不写进插件自己的 deps.json：包走 ReferenceDependencyPaths，工程引用走 ReferencePath。 -->
+      <ReferenceDependencyPaths Remove="@(ReferenceDependencyPaths)"
+        Condition="$([System.String]::Copy('$(_OBSharpHostAssemblyNames)').Contains(';%(ReferenceDependencyPaths.Filename);'))" />
+      <RuntimeCopyLocalItems Remove="@(RuntimeCopyLocalItems)"
+        Condition="$([System.String]::Copy('$(_OBSharpHostAssemblyNames)').Contains(';%(RuntimeCopyLocalItems.Filename);'))" />
+      <ReferencePath Condition="$([System.String]::Copy('$(_OBSharpHostAssemblyNames)').Contains(';%(ReferencePath.Filename);'))">
+        <IncludeRuntimeDependency>false</IncludeRuntimeDependency>
+      </ReferencePath>
+    </ItemGroup>
+  </Target>
+
+  <!-- dotnet publish 用的是另一份列表，这里再去掉一遍。 -->
+  <Target Name="OBSharpExcludeHostAssembliesFromPublish"
+    Condition="'$(OBSharpExcludeHostAssembliesFromOutput)' == 'true'"
+    AfterTargets="ComputeResolvedFilesToPublishList"
+    BeforeTargets="CopyFilesToPublishDirectory">
+    <PropertyGroup>
+      <_OBSharpHostAssemblyNames>;@(OBSharpHostAssembly,';');</_OBSharpHostAssemblyNames>
+    </PropertyGroup>
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="$([System.String]::Copy('$(_OBSharpHostAssemblyNames)').Contains(';%(ResolvedFileToPublish.Filename);'))" />
+    </ItemGroup>
+  </Target>
+
+</Project>
