@@ -92,9 +92,8 @@ jobs:
           path: artifacts/publish/OBSharp.Runtime/release
           if-no-files-found: error
 
-
-  build-loader:
-    name: 构建 Loader (${{ matrix.rid }})
+  bundle:
+    name: 构建并打包 (${{ matrix.rid }})
     needs: build
     runs-on: ${{ matrix.runs-on }}
     strategy:
@@ -103,33 +102,34 @@ jobs:
         include:
           - runs-on: windows-2025-vs2026
             rid: win-x64
-            arch: x64
-            outdir: x64
-
+            loader: OBSharp/bin/64bit/
+            runtime: OBSharp/bin/any/
+            data: OBSharp/data/
           - runs-on: windows-11-vs2026-arm
             rid: win-arm64
-            arch: arm64
-            outdir: arm64
-
+            loader: OBSharp/bin/64bit/
+            runtime: OBSharp/bin/any/
+            data: OBSharp/data/
           - runs-on: ubuntu-26.04
             rid: linux-x64
-            arch: x86_64
-            outdir: x64
-
+            loader: OBSharp/bin/64bit/
+            runtime: OBSharp/bin/any/
+            data: OBSharp/data/
           - runs-on: ubuntu-26.04-arm
             rid: linux-arm64
-            arch: arm64
-            outdir: arm64
-
+            loader: OBSharp/bin/64bit/
+            runtime: OBSharp/bin/any/
+            data: OBSharp/data/
           - runs-on: macos-26
             rid: osx-x64
-            arch: x86_64
-            outdir: x64
-
+            loader: OBSharp.plugin/Contents/MacOS/
+            runtime: OBSharp.plugin/Contents/any/
+            data: OBSharp.plugin/Contents/Resources/
           - runs-on: macos-26
             rid: osx-arm64
-            arch: arm64
-            outdir: arm64
+            loader: OBSharp.plugin/Contents/MacOS/
+            runtime: OBSharp.plugin/Contents/any/
+            data: OBSharp.plugin/Contents/Resources/
     steps:
       - name: 签出仓库
         uses: actions/checkout@v7
@@ -139,6 +139,12 @@ jobs:
         with:
           name: OBSharp.Version
           path: .
+
+      - name: 下载运行时程序集
+        uses: actions/download-artifact@v8
+        with:
+          name: OBSharp.Runtime
+          path: out/${{ matrix.runtime }}
 
       - name: 配置 .Net 环境
         uses: actions/setup-dotnet@v6
@@ -152,75 +158,20 @@ jobs:
             --password "${{ github.token }}" `
             --store-password-in-clear-text
 
-      - name: 还原 Loader 项目
+      - name: 还原 Loader
         run: dotnet restore src/OBSharp.Loader --runtime ${{ matrix.rid }} --graph --artifacts-path artifacts
 
-      - name: 编译 Loader 项目
+      - name: 构建 Loader
         run: dotnet build src/OBSharp.Loader --runtime ${{ matrix.rid }} --graph --artifacts-path artifacts --configuration Release --no-restore
 
-      - name: 以 NativeAOT 发布 Loader
+      - name: 发布 Loader
         run: dotnet publish src/OBSharp.Loader --runtime ${{ matrix.rid }} --graph --artifacts-path artifacts --configuration Release --no-restore --no-build
 
-      - name: 上传 Loader 项目
-        uses: actions/upload-artifact@v7
-        with:
-          name: OBSharp.Loader-${{ matrix.rid }}
-          path: artifacts/publish/OBSharp.Loader/release_${{ matrix.rid }}/
-          if-no-files-found: error
-
-  bundle:
-    name: Bundle
-    needs:
-      - build
-      - build-loader
-    runs-on: ubuntu-26.04
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - rid: win-x64
-            loader: OBSharp/bin/64bit/
-            runtime: OBSharp/bin/any/
-            data: OBSharp/data/
-          - rid: win-arm64
-            loader: OBSharp/bin/64bit/
-            runtime: OBSharp/bin/any/
-            data: OBSharp/data/
-          - rid: linux-x64
-            loader: OBSharp/bin/64bit/
-            runtime: OBSharp/bin/any/
-            data: OBSharp/data/
-          - rid: linux-arm64
-            loader: OBSharp/bin/64bit/
-            runtime: OBSharp/bin/any/
-            data: OBSharp/data/
-          - rid: osx-x64
-            loader: OBSharp.plugin/Contents/MacOS/
-            runtime: OBSharp.plugin/Contents/any/
-            data: OBSharp.plugin/Contents/Resources/
-          - rid: osx-arm64
-            loader: OBSharp.plugin/Contents/MacOS/
-            runtime: OBSharp.plugin/Contents/any/
-            data: OBSharp.plugin/Contents/Resources/
-    steps:
-      - name: 检出 data 目录
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 1
-          sparse-checkout: |-
-            src/OBSharp.Runtime/Data
-
-      - name: 下载运行时程序集
-        uses: actions/download-artifact@v8
-        with:
-          name: OBSharp.Runtime
-          path: out/${{ matrix.runtime }}
-
-      - name: 下载 OB# 加载器
-        uses: actions/download-artifact@v8
-        with:
-          name: OBSharp.Loader-${{ matrix.rid }}
-          path: out/${{ matrix.loader }}
+      - name: 复制 Loader
+        run: |-
+          $source = "artifacts/publish/OBSharp.Loader/release_${{ matrix.rid }}/*"
+          $destination = New-Item -ItemType Directory -Force -Path "out/${{ matrix.loader }}"
+          Copy-Item -Path $source -Destination $destination -Recurse -Force
 
       - name: 复制 data
         run: |-
