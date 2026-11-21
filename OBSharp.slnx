@@ -9,4 +9,5 @@
     <File Path="nuget.config" />
   </Folder>
   <Project Path="src/OBSharp.Loader/OBSharp.Loader.csproj" />
+  <Project Path="src/OBSharp.Sdk/OBSharp.Sdk.csproj" />
 </Solution>
