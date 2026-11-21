@@ -14,7 +14,7 @@ public static unsafe class EntryPoints
 {
     private const string AssemblyFileName = "OBSharp.Runtime.dll";
     private const string RuntimeConfigFileName = "OBSharp.Runtime.runtimeconfig.json";
-    private const string TypeName = "OBSharp.Runtime.OBSModule, OBSharp.Runtime";
+    private const string TypeName = "OBSharp.OBSModule, OBSharp.Runtime";
 
     private const int LIBOBS_API_MAJOR_VER = 32;
     private const int LIBOBS_API_MINOR_VER = 0;
