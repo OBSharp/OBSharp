@@ -1,0 +1,268 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  build:
+    name: 构建
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.gitversion.outputs.SemVer }}
+      short: ${{ steps.gitversion.outputs.MajorMinorPatch }}
+    steps:
+      - name: 签出仓库
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: 配置 .Net 环境
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: ./global.json
+
+      - name: 配置 NuGet 源
+        run: |
+          dotnet nuget update source OBSharp `
+            --username "github-actions[bot]" `
+            --password "${{ github.token }}" `
+            --store-password-in-clear-text
+
+      - name: 生成版本文件
+        id: gitversion
+        run: |
+          "### Version Information" >> $env:GITHUB_STEP_SUMMARY
+          '```' >> $env:GITHUB_STEP_SUMMARY
+          $Version = dotnet tool exec Shimakaze.GitSemVer --version 0.0.1-preview.1 | ConvertFrom-Json
+          $Version >> $env:GITHUB_STEP_SUMMARY
+          '```' >> $env:GITHUB_STEP_SUMMARY
+          @"
+          <Project>
+            <PropertyGroup>
+              <Version>$($Version.SemVer)</Version>
+              <VersionPrefix>$($Version.MajorMinorPatch)</VersionPrefix>
+              <VersionSuffix>$($Version.PreReleaseTag)</VersionSuffix>
+              <PackageVersion>$($Version.FullSemVer)</PackageVersion>
+              <InformationalVersion>$($Version.InformationalVersion)</InformationalVersion>
+              <AssemblyVersion>$($Version.AssemblySemVer)</AssemblyVersion>
+              <FileVersion>$($Version.AssemblyFileSemVer)</FileVersion>
+              <RepositoryBranch>$($Version.Branch)</RepositoryBranch>
+              <RepositoryCommit>$($Version.Sha)</RepositoryCommit>
+            </PropertyGroup>
+          </Project>
+          "@ | Set-Content Directory.Version.props -Encoding utf8
+
+          Write-Output "SemVer=$($Version.SemVer)" >> $env:GITHUB_OUTPUT
+          Write-Output "MajorMinorPatch=$($Version.MajorMinorPatch)" >> $env:GITHUB_OUTPUT
+
+      - name: 上传版本文件
+        uses: actions/upload-artifact@v7
+        with:
+          name: OBSharp.Version
+          path: Directory.Version.props
+          if-no-files-found: error
+
+      - name: 还原依赖
+        run: dotnet restore --graph --artifacts-path artifacts
+
+      - name: 构建 .NET 项目
+        run: dotnet build --graph --artifacts-path artifacts --configuration Release --no-restore
+
+      - name: 发布 Runtime
+        run: dotnet publish src/OBSharp.Runtime --graph --artifacts-path artifacts --configuration Release --no-restore
+
+      - name: 上传托管程序集
+        uses: actions/upload-artifact@v7
+        with:
+          name: OBSharp.Runtime
+          path: artifacts/publish/OBSharp.Runtime/release
+          if-no-files-found: error
+
+
+  build-loader:
+    name: 构建 Loader (${{ matrix.rid }})
+    needs: build
+    runs-on: ${{ matrix.runs-on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runs-on: windows-2025-vs2026
+            rid: win-x64
+            arch: x64
+            outdir: x64
+
+          - runs-on: windows-11-vs2026-arm
+            rid: win-arm64
+            arch: arm64
+            outdir: arm64
+
+          - runs-on: ubuntu-26.04
+            rid: linux-x64
+            arch: x86_64
+            outdir: x64
+
+          - runs-on: ubuntu-26.04-arm
+            rid: linux-arm64
+            arch: arm64
+            outdir: arm64
+
+          - runs-on: macos-26
+            rid: osx-x64
+            arch: x86_64
+            outdir: x64
+
+          - runs-on: macos-26
+            rid: osx-arm64
+            arch: arm64
+            outdir: arm64
+    steps:
+      - name: 签出仓库
+        uses: actions/checkout@v7
+
+      - name: 下载版本文件
+        uses: actions/download-artifact@v8
+        with:
+          name: OBSharp.Version
+          path: .
+
+      - name: 配置 .Net 环境
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: ./global.json
+
+      - name: 配置 NuGet 源
+        run: |
+          dotnet nuget update source OBSharp `
+            --username "github-actions[bot]" `
+            --password "${{ github.token }}" `
+            --store-password-in-clear-text
+
+      - name: 还原 Loader 项目
+        run: dotnet restore src/OBSharp.Loader --runtime ${{ matrix.rid }} --graph --artifacts-path artifacts
+
+      - name: 编译 Loader 项目
+        run: dotnet build src/OBSharp.Loader --runtime ${{ matrix.rid }} --graph --artifacts-path artifacts --configuration Release --no-restore
+
+      - name: 以 NativeAOT 发布 Loader
+        run: dotnet publish src/OBSharp.Loader --runtime ${{ matrix.rid }} --graph --artifacts-path artifacts --configuration Release --no-restore --no-build
+
+      - name: 上传 Loader 项目
+        uses: actions/upload-artifact@v7
+        with:
+          name: OBSharp.Loader-${{ matrix.rid }}
+          path: artifacts/publish/OBSharp.Loader/release_${{ matrix.rid }}/
+          if-no-files-found: error
+
+  bundle:
+    name: Bundle
+    needs:
+      - build
+      - build-loader
+    runs-on: ubuntu-26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            loader: OBSharp/bin/64bit/
+            runtime: OBSharp/bin/any/
+            data: OBSharp/data/
+          - rid: win-arm64
+            loader: OBSharp/bin/64bit/
+            runtime: OBSharp/bin/any/
+            data: OBSharp/data/
+          - rid: linux-x64
+            loader: OBSharp/bin/64bit/
+            runtime: OBSharp/bin/any/
+            data: OBSharp/data/
+          - rid: linux-arm64
+            loader: OBSharp/bin/64bit/
+            runtime: OBSharp/bin/any/
+            data: OBSharp/data/
+          - rid: osx-x64
+            loader: OBSharp.plugin/Contents/MacOS/
+            runtime: OBSharp.plugin/Contents/any/
+            data: OBSharp.plugin/Contents/Resources/
+          - rid: osx-arm64
+            loader: OBSharp.plugin/Contents/MacOS/
+            runtime: OBSharp.plugin/Contents/any/
+            data: OBSharp.plugin/Contents/Resources/
+    steps:
+      - name: 检出 data 目录
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          sparse-checkout: |-
+            src/OBSharp.Runtime/Data
+
+      - name: 下载运行时程序集
+        uses: actions/download-artifact@v8
+        with:
+          name: OBSharp.Runtime
+          path: out/${{ matrix.runtime }}
+
+      - name: 下载 OB# 加载器
+        uses: actions/download-artifact@v8
+        with:
+          name: OBSharp.Loader-${{ matrix.rid }}
+          path: out/${{ matrix.loader }}
+
+      - name: 复制 data
+        run: |-
+          $source = "src/OBSharp.Runtime/Data/*"
+          $destination = New-Item -ItemType Directory -Force -Path "out/${{ matrix.data }}"
+          Copy-Item -Path $source -Destination $destination -Recurse -Force
+
+      - name: 创建 macOS 插件包 Info.plist
+        if: ${{ startsWith(matrix.rid, 'osx-') }}
+        run: |-
+          @'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleDevelopmentRegion</key>
+            <string>en</string>
+            <key>CFBundleDisplayName</key>
+            <string>OB♯</string>
+            <key>CFBundleExecutable</key>
+            <string>OBSharp</string>
+            <key>CFBundleIdentifier</key>
+            <string>dev.shimakaze.obsharp</string>
+            <key>CFBundleInfoDictionaryVersion</key>
+            <string>6.0</string>
+            <key>CFBundleName</key>
+            <string>OBSharp</string>
+            <key>CFBundlePackageType</key>
+            <string>BNDL</string>
+            <key>CFBundleShortVersionString</key>
+            <string>${{ needs.build.outputs.version }}</string>
+            <key>CFBundleSupportedPlatforms</key>
+            <array>
+              <string>MacOSX</string>
+            </array>
+            <key>CFBundleVersion</key>
+            <string>${{ needs.build.outputs.short }}</string>
+          </dict>
+          </plist>
+          '@ | Out-File -FilePath "out/OBSharp.plugin/Contents/Info.plist" -Encoding utf8
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: OBSharp-${{ matrix.rid }}
+          path: out/
+          if-no-files-found: error
