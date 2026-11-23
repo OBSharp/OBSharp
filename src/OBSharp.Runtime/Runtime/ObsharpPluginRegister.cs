@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Globalization;
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -148,11 +149,11 @@ internal sealed partial class OBSharpPluginRegister(
     {
         // 顺序跟 ResolvePath 一致：bin/any 里的路径都以 BinaryPath 的父目录开头，
         // 先判 BinaryPath 不会命中，但先判 binAny 可以避免以后把 any 挪到别处时出错。
-        if (path.StartsWith(BinAnyPath))
+        if (path.StartsWith(BinAnyPath, StringComparison.InvariantCulture))
             return Path.Combine("$binAny", path[BinAnyPath.Length..]);
-        else if (path.StartsWith(options.Value.BinaryPath))
+        else if (path.StartsWith(options.Value.BinaryPath, StringComparison.InvariantCulture))
             return Path.Combine("$bin", path[options.Value.BinaryPath.Length..]);
-        else if (path.StartsWith(options.Value.DataPath))
+        else if (path.StartsWith(options.Value.DataPath, StringComparison.InvariantCulture))
             return Path.Combine("$data", path[options.Value.DataPath.Length..]);
         return path;
     }

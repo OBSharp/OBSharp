@@ -4,7 +4,7 @@ namespace OBSharp;
 
 /// <summary>
 /// 把插件的 .NET 日志接到 OBS 日志上（落地在 <see cref="ObsLogger"/>）。
-/// <see cref="ObsPluginContext.CreateBuilder"/> 会把它注册进插件的 Web 应用，所以插件里
+/// <see cref="ObsPlugin.CreateBuilder"/> 会把它注册进插件的 Web 应用，所以插件里
 /// 通过 DI 拿到的 <see cref="ILogger"/> / <see cref="ILogger{T}"/> / <see cref="ILoggerFactory"/>
 /// 写出来的日志都会落进 OBS 日志，每行以插件标识符开头；过滤按 .NET 自己的规则走
 /// （即插件的 <c>appsettings.json</c> 里的 <c>Logging:LogLevel</c>）。
