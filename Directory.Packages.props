@@ -6,6 +6,7 @@
   <ItemGroup>
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="11.0.0" />
     <PackageVersion Include="OBSharp.Interop.OBS" Version="0.0.1-alpha.1" />
+    <PackageVersion Include="OBSharp.Interop.Qt" Version="0.0.1-alpha.2" />
     <PackageVersion Include="Shimakaze.HostFxr" Version="0.0.10" />
     <PackageVersion Include="Shimakaze.NetHost" Version="0.0.10" />
   </ItemGroup>

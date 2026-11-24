@@ -35,6 +35,8 @@
     <OBSharpHostAssembly Include="Microsoft.Extensions.Logging.EventSource" />
     <OBSharpHostAssembly Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
     <OBSharpHostAssembly Include="OBSharp.Interop.OBS" />
+    <OBSharpHostAssembly Include="OBSharp.Interop.Qt.Native" />
+    <OBSharpHostAssembly Include="OBSharp.Interop.Qt.runtime" />
     <OBSharpHostAssembly Include="OBSharp.Runtime" />
     <OBSharpHostAssembly Include="OBSharp.Sdk" />
     <OBSharpHostAssembly Include="System.Diagnostics.EventLog" />
