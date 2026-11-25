@@ -21,8 +21,8 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: 1
 
 jobs:
-  build:
-    name: 构建
+  build-common:
+    name: 构建通用组件
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.gitversion.outputs.SemVer }}
@@ -79,11 +79,11 @@ jobs:
           path: Directory.Version.props
           if-no-files-found: error
 
-      - name: 还原依赖
-        run: dotnet restore --graph --artifacts-path artifacts
+      - name: 还原 SDK 依赖
+        run: dotnet restore src/OBSharp.Sdk --graph --artifacts-path artifacts
 
-      - name: 构建 .NET 项目
-        run: dotnet build --graph --artifacts-path artifacts --configuration Release --no-restore
+      - name: 构建 SDK
+        run: dotnet build src/OBSharp.Sdk --graph --artifacts-path artifacts --configuration Release --no-restore
 
       - name: 打包 OBSharp.Sdk
         run: dotnet pack src/OBSharp.Sdk --graph --artifacts-path artifacts --configuration Release --no-restore --no-build --include-symbols --include-source
@@ -98,19 +98,9 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-      - name: 发布 Runtime
-        run: dotnet publish src/OBSharp.Runtime --graph --artifacts-path artifacts --configuration Release --no-restore
-
-      - name: 上传托管程序集
-        uses: actions/upload-artifact@v7
-        with:
-          name: OBSharp.Runtime
-          path: artifacts/publish/OBSharp.Runtime/release
-          if-no-files-found: error
-
-  bundle:
+  build-native:
     name: 构建并打包 (${{ matrix.rid }})
-    needs: build
+    needs: build-common
     runs-on: ${{ matrix.runs-on }}
     strategy:
       fail-fast: false
@@ -156,12 +146,6 @@ jobs:
           name: OBSharp.Version
           path: .
 
-      - name: 下载运行时程序集
-        uses: actions/download-artifact@v8
-        with:
-          name: OBSharp.Runtime
-          path: out/${{ matrix.runtime }}
-
       - name: 配置 .Net 环境
         uses: actions/setup-dotnet@v6
         with:
@@ -173,6 +157,21 @@ jobs:
             --username "github-actions[bot]" `
             --password "${{ github.token }}" `
             --store-password-in-clear-text
+
+      - name: 还原 Runtime
+        run: dotnet restore src/OBSharp.Runtime --runtime ${{ matrix.rid }} --graph --artifacts-path artifacts
+
+      - name: 构建 Runtime
+        run: dotnet build src/OBSharp.Runtime --runtime ${{ matrix.rid }} --graph --artifacts-path artifacts --configuration Release --no-restore
+
+      - name: 发布 Runtime
+        run: dotnet publish src/OBSharp.Runtime --runtime ${{ matrix.rid }} --graph --artifacts-path artifacts --configuration Release --no-restore --no-build
+
+      - name: 复制 Runtime
+        run: |-
+          $source = "artifacts/publish/OBSharp.Runtime/release_${{ matrix.rid }}/*"
+          $destination = New-Item -ItemType Directory -Force -Path "out/${{ matrix.runtime }}"
+          Copy-Item -Path $source -Destination $destination -Recurse -Force
 
       - name: 还原 Loader
         run: dotnet restore src/OBSharp.Loader --runtime ${{ matrix.rid }} --graph --artifacts-path artifacts
@@ -218,13 +217,13 @@ jobs:
             <key>CFBundlePackageType</key>
             <string>BNDL</string>
             <key>CFBundleShortVersionString</key>
-            <string>${{ needs.build.outputs.version }}</string>
+            <string>${{ needs.build-common.outputs.version }}</string>
             <key>CFBundleSupportedPlatforms</key>
             <array>
               <string>MacOSX</string>
             </array>
             <key>CFBundleVersion</key>
-            <string>${{ needs.build.outputs.short }}</string>
+            <string>${{ needs.build-common.outputs.short }}</string>
           </dict>
           </plist>
           '@ | Out-File -FilePath "out/OBSharp.plugin/Contents/Info.plist" -Encoding utf8
@@ -236,7 +235,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    needs: bundle
+    needs: build-native
     name: 发布
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
